@@ -420,8 +420,9 @@ class TestNew(unittest.TestCase):
 
         result = runner.invoke(
             client.new,
-            ['--user', 'bowlofeggs', '--password', 's3kr3t', '--autokarma', 'bodhi-2.2.4-1.el7',
-             '--severity', 'urgent', '--notes', 'No description.'])
+            ['--user', 'bowlofeggs', '--password', 's3kr3t', '--autokarma', '--autotime',
+             'bodhi-2.2.4-1.el7', '--severity', 'urgent', '--notes', 'No description.',
+             '--stable-days', 7])
 
         self.assertEqual(result.exit_code, 0)
         expected_output = client_test_data.EXPECTED_UPDATE_OUTPUT.replace('unspecified', 'urgent')
@@ -435,7 +436,8 @@ class TestNew(unittest.TestCase):
                     'staging': False, 'builds': 'bodhi-2.2.4-1.el7', 'autokarma': True,
                     'suggest': None, 'notes': 'No description.', 'request': None, 'bugs': '',
                     'requirements': None, 'unstable_karma': None, 'file': None,
-                    'notes_file': None, 'type': 'bugfix', 'severity': 'urgent'
+                    'notes_file': None, 'type': 'bugfix', 'severity': 'urgent', 'autotime': True,
+                    'stable_days': 7
                 }
             ),
             mock.call(
@@ -475,7 +477,8 @@ class TestNew(unittest.TestCase):
                     'staging': False, 'builds': 'bodhi-2.2.4-1.el7', 'autokarma': True,
                     'suggest': None, 'notes': 'No description.', 'request': None,
                     'bugs': '', 'requirements': None, 'unstable_karma': None, 'file': None,
-                    'notes_file': None, 'type': 'bugfix', 'severity': 'urgent'
+                    'notes_file': None, 'type': 'bugfix', 'severity': 'urgent', 'autotime': False,
+                    'stable_days': None
                 }
             ),
             mock.call(
@@ -514,7 +517,8 @@ class TestNew(unittest.TestCase):
                     'staging': False, 'builds': 'bodhi-2.2.4-1.el7', 'autokarma': True,
                     'suggest': None, 'notes': 'No description.', 'request': None, 'bugs': '',
                     'requirements': None, 'unstable_karma': None, 'file': None,
-                    'notes_file': None, 'type': 'bugfix', 'severity': None
+                    'notes_file': None, 'type': 'bugfix', 'severity': None, 'autotime': False,
+                    'stable_days': None
                 }
             ),
             mock.call(
@@ -635,7 +639,8 @@ class TestNew(unittest.TestCase):
                     'staging': False, 'builds': 'bodhi-2.2.4-1.el7', 'autokarma': True,
                     'suggest': None, 'notes': 'No description.', 'request': None,
                     'bugs': '1234567', 'requirements': None, 'unstable_karma': None, 'file': None,
-                    'notes_file': None, 'type': 'bugfix', 'severity': None
+                    'notes_file': None, 'type': 'bugfix', 'severity': None, 'autotime': False,
+                    'stable_days': None
                 }
             ),
             mock.call(
@@ -1488,7 +1493,7 @@ class TestEdit(unittest.TestCase):
                     'suggest': 'unspecified', 'notes': 'New package.',
                     'notes_file': None, 'request': None, 'unstable_karma': -3,
                     'bugs': '1234,5678', 'requirements': '', 'type': 'newpackage',
-                    'severity': 'low'}),
+                    'severity': 'low', 'autotime': False, 'stable_days': None}),
             mock.call(
                 bindings_client,
                 'updates/FEDORA-EPEL-2016-3081a94111/get-test-results',
@@ -1525,7 +1530,7 @@ class TestEdit(unittest.TestCase):
                     'suggest': 'unspecified', 'notes': 'Updated package.',
                     'notes_file': None, 'request': None, 'unstable_karma': -3,
                     'bugs': '1420605', 'requirements': '', 'type': 'newpackage',
-                    'severity': 'low'
+                    'severity': 'low', 'autotime': False, 'stable_days': None
                 }
             ),
             mock.call(
@@ -1568,7 +1573,7 @@ class TestEdit(unittest.TestCase):
                     'suggest': 'unspecified', 'notes': 'this is an edited note',
                     'notes_file': None, 'request': None, 'severity': 'low',
                     'bugs': '1420605', 'requirements': '', 'unstable_karma': -3,
-                    'type': 'newpackage'
+                    'type': 'newpackage', 'autotime': False, 'stable_days': None,
                 }
             ),
             mock.call(
@@ -1616,7 +1621,7 @@ class TestEdit(unittest.TestCase):
                         'suggest': 'unspecified', 'notes': 'This is a --notes-file note!',
                         'notes_file': 'notefile.txt', 'request': None, 'severity': 'low',
                         'bugs': '1420605', 'requirements': '', 'unstable_karma': -3,
-                        'type': 'newpackage'
+                        'type': 'newpackage', 'autotime': False, 'stable_days': None
                     }
                 ),
                 mock.call(
@@ -1664,7 +1669,7 @@ class TestEdit(unittest.TestCase):
                     'suggest': u'unspecified', 'notes': u'add and remove builds',
                     'notes_file': None, 'request': None, 'severity': u'low',
                     'bugs': '1420605', 'requirements': u'', 'unstable_karma': -3,
-                    'type': 'newpackage'
+                    'type': 'newpackage', 'autotime': False, 'stable_days': None
                 }
             ),
             mock.call(
@@ -1751,7 +1756,8 @@ class TestEdit(unittest.TestCase):
                     'suggest': 'unspecified', 'notes': 'testing required tasks',
                     'notes_file': None, 'request': None, 'severity': 'low',
                     'bugs': '1420605', 'unstable_karma': -3,
-                    'requirements': 'dist.depcheck dist.rpmdeplint', 'type': 'newpackage'
+                    'requirements': 'dist.depcheck dist.rpmdeplint', 'type': 'newpackage',
+                    'autotime': False, 'stable_days': None
                 }
             ),
             mock.call(
@@ -1810,7 +1816,8 @@ class TestEdit(unittest.TestCase):
                     'autokarma': False, 'edited': 'FEDORA-2017-c95b33872d',
                     'suggest': 'unspecified', 'notes': 'New package.',
                     'notes_file': None, 'request': None, 'severity': 'low',
-                    'bugs': '', 'requirements': '', 'unstable_karma': -3, 'type': 'newpackage'
+                    'bugs': '', 'requirements': '', 'unstable_karma': -3, 'type': 'newpackage',
+                    'autotime': False, 'stable_days': None
                 }
             ),
             mock.call(

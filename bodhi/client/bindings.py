@@ -239,6 +239,11 @@ class BodhiClient(OpenIdBaseClient):
                 (``reboot``, ``logout``).
             inheritance (bool): Follow koji build inheritance, which may result in
                 this update being pushed out to additional releases.
+            autotime (bool): Allow bodhi to automatically change the state of this
+                update based on the time spent in testing by this update. It
+                will push your update to ``stable`` once it reaches the ``stable_days``.
+            stable_days (int): The minimun amount of time an update has to spend in
+                ``testing`` before being automatically pushed to ``stable``.
             autokarma (bool): Allow bodhi to automatically change the state of this
                 update based on the ``karma`` from user feedback.  It will
                 push your update to ``stable`` once it reaches the ``stable_karma``

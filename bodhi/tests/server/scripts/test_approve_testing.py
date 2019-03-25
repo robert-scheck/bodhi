@@ -483,3 +483,195 @@ class TestMain(BaseTestCase):
             stdout.getvalue(),
             'usage: nosetests <config_uri>\n(example: "nosetests development.ini")\n')
         exit.assert_called_once_with(1)
+
+    def test_autotime_update_meeting_test_requirements_gets_pushed(self):
+        """
+        Ensure that an autotime update that meets the test requirements gets pushed to stable.
+        """
+        update = self.db.query(models.Update).all()[0]
+        update.autokarma = False
+        update.autotime = True
+        update.request = None
+        update.stable_karma = 10
+        update.stable_days = 7
+        update.date_testing = datetime.utcnow() - timedelta(days=7)
+        update.status = models.UpdateStatus.testing
+        self.db.commit()
+
+        with patch('bodhi.server.scripts.approve_testing.initialize_db'):
+            with patch('bodhi.server.scripts.approve_testing.get_appsettings', return_value=''):
+                approve_testing.main(['nosetests', 'some_config.ini'])
+
+        self.assertEqual(update.request, models.UpdateRequest.stable)
+
+    def test_autotime_update_does_not_meet_stable_days_doesnt_get_pushed(self):
+        """
+        Ensure that an autotime update that meets the test requirements but has a longer
+        stable days define does not get push.
+        """
+        update = self.db.query(models.Update).all()[0]
+        update.autokarma = False
+        update.autotime = True
+        update.request = None
+        update.stable_karma = 10
+        update.stable_days = 10
+        update.date_testing = datetime.utcnow() - timedelta(days=7)
+        update.status = models.UpdateStatus.testing
+        self.db.commit()
+
+        with patch('bodhi.server.scripts.approve_testing.initialize_db'):
+            with patch('bodhi.server.scripts.approve_testing.get_appsettings', return_value=''):
+                approve_testing.main(['nosetests', 'some_config.ini'])
+
+        self.assertEqual(update.request, None)
+
+    def test_autotime_update_meeting_stable_days_get_pushed(self):
+        """
+        Ensure that an autotime update that meets the stable days gets pushed.
+        """
+        update = self.db.query(models.Update).all()[0]
+        update.autokarma = False
+        update.autotime = True
+        update.request = None
+        update.stable_karma = 10
+        update.stable_days = 10
+        update.date_testing = datetime.utcnow() - timedelta(days=10)
+        update.status = models.UpdateStatus.testing
+        self.db.commit()
+
+        with patch('bodhi.server.scripts.approve_testing.initialize_db'):
+            with patch('bodhi.server.scripts.approve_testing.get_appsettings', return_value=''):
+                approve_testing.main(['nosetests', 'some_config.ini'])
+
+        self.assertEqual(update.request, models.UpdateRequest.stable)
+
+    def test_no_autotime_update_meeting_stable_days_and_test_requirement(self):
+        """
+        Ensure that a normal update that meets the stable days and test requirements
+        doe not get pushed.
+        """
+        update = self.db.query(models.Update).all()[0]
+        update.autokarma = False
+        update.autotime = False
+        update.request = None
+        update.stable_karma = 10
+        update.stable_days = 10
+        update.date_testing = datetime.utcnow() - timedelta(days=10)
+        update.status = models.UpdateStatus.testing
+        self.db.commit()
+
+        with patch('bodhi.server.scripts.approve_testing.initialize_db'):
+            with patch('bodhi.server.scripts.approve_testing.get_appsettings', return_value=''):
+                approve_testing.main(['nosetests', 'some_config.ini'])
+
+        self.assertEqual(update.request, None)
+
+    @patch.dict(config, [('fedora.mandatory_days_in_testing', 2)])
+    def test_autotime_update_does_not_meet_test_requirements(self):
+        """
+        Ensure that an autotime update that does not meet the test requirements
+        does not pushed to stable.
+        """
+        update = self.db.query(models.Update).all()[0]
+        update.autokarma = False
+        update.autotime = True
+        update.request = None
+        update.stable_days = update.mandatory_days_in_testing
+        update.stable_karma = 10
+        update.date_testing = datetime.utcnow() - timedelta(days=1)
+        update.status = models.UpdateStatus.testing
+        self.db.commit()
+
+        with patch('bodhi.server.scripts.approve_testing.initialize_db'):
+            with patch('bodhi.server.scripts.approve_testing.get_appsettings', return_value=''):
+                approve_testing.main(['nosetests', 'some_config.ini'])
+
+        self.assertEqual(update.request, None)
+
+    @patch.dict(config, [('fedora.mandatory_days_in_testing', 0)])
+    def test_autotime_update_does_no_mandatory_days_in_testing(self):
+        """
+        Ensure that an autotime update that does not have mandatory days in testing
+        does get pushed to stable.
+        """
+        update = self.db.query(models.Update).all()[0]
+        update.autokarma = False
+        update.autotime = True
+        update.request = None
+        update.stable_karma = 10
+        update.date_testing = datetime.utcnow()
+        update.status = models.UpdateStatus.testing
+        self.db.commit()
+
+        with patch('bodhi.server.scripts.approve_testing.initialize_db'):
+            with patch('bodhi.server.scripts.approve_testing.get_appsettings', return_value=''):
+                approve_testing.main(['nosetests', 'some_config.ini'])
+
+        self.assertEqual(update.request, models.UpdateRequest.stable)
+
+    @patch.dict(config, [('fedora.mandatory_days_in_testing', 0)])
+    def test_autotime_update_zero_day_in_testing_meeting_test_requirements_gets_pushed(self):
+        """
+        Ensure that an autotime update with 0 mandatory_days_in_testing that meets
+        the test requirements gets pushed to stable.
+        """
+        update = self.db.query(models.Update).all()[0]
+        update.autokarma = False
+        update.autotime = True
+        update.request = None
+        update.stable_karma = 10
+        update.stable_days = 0
+        update.date_testing = datetime.utcnow() - timedelta(days=0)
+        update.status = models.UpdateStatus.testing
+        self.db.commit()
+
+        with patch('bodhi.server.scripts.approve_testing.initialize_db'):
+            with patch('bodhi.server.scripts.approve_testing.get_appsettings', return_value=''):
+                approve_testing.main(['nosetests', 'some_config.ini'])
+
+        self.assertEqual(update.request, models.UpdateRequest.stable)
+
+    @patch.dict(config, [('fedora.mandatory_days_in_testing', 0)])
+    @patch.dict(config, [('test_gating.required', True)])
+    def test_autotime_update_zero_day_in_testing_fail_gating_is_not_pushed(self):
+        """
+        Ensure that an autotime update with 0 mandatory days in testing that failed gating
+        does not get pushed to stable.
+        """
+        update = self.db.query(models.Update).all()[0]
+        update.autokarma = False
+        update.autotime = True
+        update.request = None
+        update.stable_karma = 10
+        update.stable_days = 0
+        update.test_gating_status = models.TestGatingStatus.failed
+        update.date_testing = datetime.utcnow() - timedelta(days=0)
+        update.status = models.UpdateStatus.testing
+        self.db.commit()
+
+        with patch('bodhi.server.scripts.approve_testing.initialize_db'):
+            with patch('bodhi.server.scripts.approve_testing.get_appsettings', return_value=''):
+                approve_testing.main(['nosetests', 'some_config.ini'])
+
+        self.assertEqual(update.request, None)
+
+    def test_autotime_update_negative_karma_does_not_get_pushed(self):
+        """
+        Ensure that an autotime update with negative karma does not get pushed.
+        """
+        update = self.db.query(models.Update).all()[0]
+        update.autokarma = False
+        update.autotime = True
+        update.request = None
+        update.stable_karma = 10
+        update.stable_days = 0
+        update.date_testing = datetime.utcnow() - timedelta(days=0)
+        update.status = models.UpdateStatus.testing
+        update.comment(self.db, u'Failed to work', author=u'luke', karma=-1)
+        self.db.commit()
+
+        with patch('bodhi.server.scripts.approve_testing.initialize_db'):
+            with patch('bodhi.server.scripts.approve_testing.get_appsettings', return_value=''):
+                approve_testing.main(['nosetests', 'some_config.ini'])
+
+        self.assertEqual(update.request, None)

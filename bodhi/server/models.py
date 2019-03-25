@@ -1536,8 +1536,12 @@ class Update(Base):
     Attributes:
         autokarma (bool): A boolean that indicates whether or not the update will
             be automatically pushed when the stable_karma threshold is reached.
+        autotime (bool): A boolean that indicates whether or not the update will
+            be automatically pushed when the time threshold is reached.
         stable_karma (int): A positive integer that indicates the amount of "good"
             karma the update must receive before being automatically marked as stable.
+        stable_days (int): A positive integer that indicates the number of days an update
+            needs to spend in testing before being automatically marked as stable.
         unstable_karma (int): A positive integer that indicates the amount of "bad"
             karma the update must receive before being automatically marked as unstable.
         requirements (unicode): A list of taskotron tests that must pass for this
@@ -1606,7 +1610,9 @@ class Update(Base):
     __get_by__ = ('alias',)
 
     autokarma = Column(Boolean, default=True, nullable=False)
+    autotime = Column(Boolean, default=False, nullable=False)
     stable_karma = Column(Integer, nullable=False)
+    stable_days = Column(Integer, nullable=False, default=0)
     unstable_karma = Column(Integer, nullable=False)
     requirements = Column(UnicodeText)
     require_bugs = Column(Boolean, default=False)
@@ -1984,6 +1990,16 @@ class Update(Base):
         release = data.pop('release', None)
         up = Update(**data, release=release)
 
+        # We want to make sure that the value of stable_days
+        # will not be lower than the mandatory_days_in_testing.
+        if up.mandatory_days_in_testing > up.stable_days:
+            up.stable_days = up.mandatory_days_in_testing
+            caveats.append({
+                'name': 'stable days',
+                'description': "The number of stable days required was set to the mandatory "
+                               f"release value {up.mandatory_days_in_testing} days"
+            })
+
         log.debug("Setting request for new update.")
         up.set_request(db, req, request.user.name)
 
@@ -2021,6 +2037,16 @@ class Update(Base):
 
         caveats = []
         edited_builds = [build.nvr for build in up.builds]
+
+        # stable_days can be set by the user we want to make sure that the value
+        # will not be lower than the mandatory_days_in_testing.
+        if up.mandatory_days_in_testing > data.get('stable_days', up.stable_days):
+            data['stable_days'] = up.mandatory_days_in_testing
+            caveats.append({
+                'name': 'stable days',
+                'description': "The number of stable days required was raised to the mandatory "
+                               f"release value {up.mandatory_days_in_testing} days"
+            })
 
         # Determine which builds have been added
         new_builds = []

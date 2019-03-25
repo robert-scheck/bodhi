@@ -484,7 +484,49 @@ class TestNewUpdate(BaseTestCase):
         self.assertEqual(up['bugs'][1]['bug_id'], 5678)
         self.assertEqual(up['bugs'][2]['bug_id'], 12345)
 
-    @mock.patch.dict('bodhi.server.validators.config', {'acl_system': 'dummy'})
+    @mock.patch.dict('bodhi.server.validators.config', {'acl_system': u'dummy'})
+    @mock.patch(**mock_valid_requirements)
+    @mock.patch('bodhi.server.notifications.publish')
+    def test_new_update_with_high_stable_days(self, publish, *args):
+        update = self.get_update('bodhi-2.0.0-2.fc17')
+        update['stable_days'] = 10
+        r = self.app.post_json('/updates/', update)
+        up = r.json_body
+
+        self.assertEqual(up['stable_days'], 10)
+
+    @mock.patch.dict('bodhi.server.validators.config', {'acl_system': u'dummy'})
+    @mock.patch(**mock_valid_requirements)
+    @mock.patch('bodhi.server.notifications.publish')
+    def test_new_update_with_invalid_stable_days(self, publish, *args):
+        update = self.get_update('bodhi-2.0.0-2.fc17')
+        update['stable_days'] = -1
+        r = self.app.post_json('/updates/', update, status=400)
+        up = r.json_body
+
+        self.assertEqual(up['status'], 'error')
+        self.assertEqual(up['errors'][0]['description'], "-1 is less than minimum value 0")
+
+    @mock.patch(**mock_valid_requirements)
+    @mock.patch('bodhi.server.notifications.publish')
+    def test_edit_update_stable_days(self, publish, *args):
+        args = self.get_update(u'bodhi-2.0.0-2.fc17')
+        args['stable_days'] = '50'
+        r = self.app.post_json('/updates/', args)
+        self.assertEqual(r.json['stable_days'], 50)
+
+    @mock.patch(**mock_valid_requirements)
+    @mock.patch('bodhi.server.notifications.publish')
+    def test_edit_update_too_low_stable_days(self, publish, *args):
+        args = self.get_update(u'bodhi-2.0.0-2.fc17')
+        args['stable_days'] = '1'
+        r = self.app.post_json('/updates/', args)
+        self.assertEqual(r.json['stable_days'], 7)
+        self.assertEqual(r.json['caveats'][0]['description'],
+                         'The number of stable days required was set to the mandatory '
+                         'release value 7 days')
+
+    @mock.patch.dict('bodhi.server.validators.config', {'acl_system': u'dummy'})
     @mock.patch(**mock_valid_requirements)
     def test_new_update_with_multiple_bugs_as_str(self, *args):
         update = self.get_update('bodhi-2.0.0-2.fc17')
@@ -604,7 +646,7 @@ class TestNewUpdate(BaseTestCase):
         self.assertEqual(r['request'], 'testing')
 
         # Since we're obsoleting something owned by someone else.
-        self.assertEqual(r['caveats'][0]['description'],
+        self.assertEqual(r['caveats'][1]['description'],
                          'This update has obsoleted bodhi-2.0.0-2.fc17, '
                          'and has inherited its bugs and notes.')
 
@@ -649,13 +691,13 @@ class TestNewUpdate(BaseTestCase):
                 r = self.app.post_json('/updates/', args).json_body
 
         # Since we're trying to obsolete security update with non security update.
-        self.assertEqual(r['caveats'][0]['description'],
+        self.assertEqual(r['caveats'][1]['description'],
                          'Adjusting type of this update to security,'
                          'since it obsoletes another security update')
         self.assertEqual(r['request'], 'testing')
 
         # Since we're obsoleting something owned by someone else.
-        self.assertEqual(r['caveats'][1]['description'],
+        self.assertEqual(r['caveats'][2]['description'],
                          'This update has obsoleted bodhi-2.0.0-2.fc17, '
                          'and has inherited its bugs and notes.')
 
@@ -705,7 +747,7 @@ class TestNewUpdate(BaseTestCase):
         self.assertEqual(r['request'], 'testing')
 
         # Since we're obsoleting something owned by someone else.
-        self.assertEqual(r['caveats'][0]['description'],
+        self.assertEqual(r['caveats'][1]['description'],
                          'This update has obsoleted bodhi-2.0.0-2.fc17, '
                          'and has inherited its bugs and notes.')
 
@@ -764,7 +806,7 @@ class TestNewUpdate(BaseTestCase):
 
         self.assertEqual(r['request'], 'testing')
         # The exception handler should have put an error message in the caveats.
-        self.assertEqual(r['caveats'][0]['description'],
+        self.assertEqual(r['caveats'][1]['description'],
                          "Problem obsoleting older updates: bet you didn't see this coming!")
         # Check for the comment multiple ways. The comment will be about the update being submitted
         # for testing instead of being about the obsoletion, since the obsoletion failed.
@@ -3618,8 +3660,11 @@ class TestUpdatesService(BaseTestCase):
             resp = self.app.post_json('/updates/', args)
 
         # Note that this does **not** obsolete the other update
-        self.assertEqual(len(resp.json_body['caveats']), 1)
+        self.assertEqual(len(resp.json_body['caveats']), 2)
         self.assertEqual(resp.json_body['caveats'][0]['description'],
+                         'The number of stable days required was set to the mandatory '
+                         'release value 7 days')
+        self.assertEqual(resp.json_body['caveats'][1]['description'],
                          "Please be aware that there is another update in "
                          "flight owned by bob, containing "
                          "bodhi-2.0-2.fc17. Are you coordinating with "
@@ -3706,11 +3751,17 @@ class TestUpdatesService(BaseTestCase):
         data = r.json_body
 
         self.assertIn('caveats', data)
-        self.assertEqual(len(data['caveats']), 2)
+        self.assertEqual(len(data['caveats']), 4)
         self.assertEqual(data['caveats'][0]['description'],
                          "Your update is being split into 2, one for each release.")
+        self.assertEqual(data['caveats'][1]['description'],
+                         'The number of stable days required was set to the mandatory '
+                         'release value 7 days')
+        self.assertEqual(data['caveats'][2]['description'],
+                         'The number of stable days required was set to the mandatory '
+                         'release value 7 days')
         self.assertEqual(
-            data['caveats'][1]['description'],
+            data['caveats'][3]['description'],
             "This update has obsoleted bodhi-2.0-1.fc17, and has inherited its bugs and notes.")
 
         self.assertIn('updates', data)
